@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# generate hdf5 files from tanks associated with specified
+# pypefiles -- automatically skips 0000-training files.
+
+if [ "$1" = "-force" ]; then
+  force="-force"
+  shift
+else
+  force=""
+fi
+
+for f in "$@"; do
+  if ! echo $f | grep -q 0000 ; then
+    tank2hdf5.py $force "$f"
+  fi
+done
+
+

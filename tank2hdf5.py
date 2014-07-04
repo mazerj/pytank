@@ -4,6 +4,17 @@
 # Convert tdt tanks associaed with specified pypefile into
 # HDF5 data stores.  This is FAST!!!
 #
+# Each block is split into chunks of 100,000 segments to avoid
+# running out of memory on typical desktops when extracting the
+# raw signal traces. Each chunk gets it's own HDF5 file with
+# and 'a', 'b' ... suffix to indicate sequence order. Time base
+# is continues across chunks. Header information is the same
+# in all chunk files just to make things easy to load.
+#
+# This application is not at all CPU intensive, but it is memory
+# intensive, so breaking it up into managable chunks prevents the
+# machine from locking up when converting big blocks/tanks/runs
+#
 
 import os
 import struct
@@ -12,9 +23,11 @@ import types
 import time
 import sys
 
+MAXSEGS_PER_FILE = 100000
+
 import numpy as np
 import pylab as p
-from scipy.signal import *
+from scipy.signal import iirdesign, filtfilt
 
 def icode(x):
 	"""Convert 4byte event code (Snip, eNeu etc) into string and vice versa.
@@ -36,9 +49,6 @@ def icode(x):
 				y = y + chr(((0xff<<(8*n)) & x)>>(8*n))
 			return y
 
-def cs(cn):
-    return 'c%02d' % cn
-
 class Block():
     lfpfilt = None
     spkfilt1 = None                       #hipass
@@ -53,7 +63,8 @@ class Block():
 		5: (8, 'Q'),                      # DFORM_QWORD
         }
     
-	def __init__(self, tank, block, limit=np.inf):
+	def __init__(self, tank, block,
+                 lfpcut=200.0, spikecut=400.0, spiketop=8000.0):
 		"""TDT block (one file inside tank). A pypefile could reference
         multiple blocks if it has been appended to! The block index (.TSQ)
         is read into memory and parsed on init. Index is used by get*
@@ -63,12 +74,19 @@ class Block():
 			tank = tank[:-1]
 		tankdir, tankname = os.path.split(tank)
         self.src = tank+os.sep+block
+        
+        if not os.path.exists(self.src):
+            sys.stderr.write('%s missing\n' % self.src)
+            sys.exit(1)
 
         h = '%s_%s' % (tankname, block)
         base = string.join((tankdir, tankname, block, h), os.sep)
 		self.tsqfile = base + '.tsq';
 		self.tevfile = base + '.tev';
 		self.fs = None
+        self.lfpcut = lfpcut
+        self.spikecut = spikecut
+        self.spiketop = spiketop
 
 		# TSQ record format is:
 		#	0 size		  int32
@@ -86,10 +104,9 @@ class Block():
 		s = struct.Struct(recfmt)
 		recfmt = 'iiiHHddif'
 		s2 = struct.Struct(recfmt)
-		
+
 		buf = open(self.tsqfile, 'rb').read()
 		nrec = (len(buf)/s.size) - 2
-		nrec = min(nrec, limit)
 		
 		self.size = [0] * nrec
 		self.type = [0] * nrec
@@ -132,12 +149,29 @@ class Block():
 		self.format = np.array(self.format)
 		self.frequency = np.array(self.frequency)
 		self.strobe = np.array(self.strobe)
+		self.recno = np.arange(len(self.size))   # record number
+        self.nrec = nrec
 
 	def printsummary(self):
 		for c in np.unique(self.icode):
 			n = np.sum(self.icode == c)
 			print '%4s %d' % (icode(c), n,)
 		print 'channels: ', self.getchns()
+
+    def splits(self):
+        """Split block up into chunks of up to 100,000 records.
+        This is to avoid running out of memory during extraction.
+        """
+        s = []
+        a = 0
+        n = 0
+        while a < self.nrec:
+            b = min(a + MAXSEGS_PER_FILE, self.nrec)
+            s.append((chr(ord('a')+n),a,b))
+            a = a + b
+            n = n + 1
+        return s
+            
 			
 	def _getsegments(self, seglist, snips=False):
 		"""Retrieve indicate segment numbers the .TEV or .SEV files
@@ -209,28 +243,37 @@ class Block():
 				channels.append(n+1)
 		return channels
 
-	def getsnips(self, channel):
+	def getsnips(self, channel, first=0, last=+np.inf):
 		"""Get snip data for specified channel.
 		Returns: time, voltage (2d arrays - nsnips x sniplen)
 		"""
 		if channel > 0:
 			ix = np.where(((self.icode == icode('eNeu')) | \
 						   (self.icode == icode('Snip'))) &
-						   (self.channel == channel))[0]
+						   (self.channel == channel) &
+                           (self.recno >= first) &
+                           (self.recno < last))[0]
 		else:
 			ix = np.where((self.icode == icode('eNeu')) | \
-						  (self.icode == icode('Snip')))[0]
+						  (self.icode == icode('Snip')) &
+                          (self.recno >= first) &
+                          (self.recno < last))[0]
+                          
 		return self._getsegments(ix, snips=True)
 
-	def getraw(self, channel):
+	def getraw(self, channel, first=0, last=+np.inf):
 		"""Get raw 16bit voltage trace for channel over entire block.
 		Returns: time, voltage (1d vectors)
 		"""
 		if channel > 0:
 			ix = np.where((self.icode==icode('RAW0')) &
-						  (self.channel==channel))[0]
+						  (self.channel==channel) &
+                          (self.recno >= first) &
+                          (self.recno < last))[0]
 		else:
-			ix = np.where((self.icode==icode('RAW0')))[0]
+			ix = np.where((self.icode==icode('RAW0')) &
+                          (self.recno >= first) &
+                          (self.recno < last))[0]
 		t, v = self._getsegments(ix)
 		return t.flatten(), v.flatten()
 
@@ -249,7 +292,7 @@ class Block():
 		"""
 		return hz / (self.fs / 2.0)
 
-	def getall(self, lfpcut=200.0, spikecut=400.0, spiketop=8000.0):
+	def getall(self, first=0, last=+np.inf):
 		"""Pull all key from the tank into memory.
 		This includes generating spike and lfp waveforms by filtering
 		the RAW0 signal.
@@ -260,16 +303,19 @@ class Block():
 		
 		self.raw = {}
 		for c in self.channellist:
-			self.raw[c] = self.getraw(c)
+			self.raw[c] = self.getraw(c, first=first, last=last)
 			if self.fs is None:
 				self.fs = (1.0/np.diff(self.raw[c][0][0:2]))[0]
 
 		if self.lfpfilt is None:
-			self.lfpfilt = iirdesign(self.W(lfpcut), self.W(1.2*lfpcut), \
+			self.lfpfilt = iirdesign(self.W(self.lfpcut), \
+                                     self.W(1.2*self.lfpcut), \
 									 0.1, 45.0)
-			self.spkfilt1 = iirdesign(self.W(spikecut), self.W(0.8*spikecut), \
+			self.spkfilt1 = iirdesign(self.W(self.spikecut), \
+                                      self.W(0.8*self.spikecut), \
                                       0.1, 45.0)
-			self.spkfilt2 = iirdesign(self.W(spiketop), self.W(1.2*spiketop), \
+			self.spkfilt2 = iirdesign(self.W(self.spiketop), \
+                                      self.W(1.2*self.spiketop), \
                                       0.1, 45.0)
 									 
 		self.lfp = {}
@@ -278,7 +324,7 @@ class Block():
 			t, v = self.raw[c]
 			# lowpass and decimate for lfp
 			l = filtfilt(self.lfpfilt[0], self.lfpfilt[1], v)
-			ds = np.ceil(self.fs/lfpcut/4.0)
+			ds = np.ceil(self.fs/self.lfpcut/4.0)
 			l = l[::ds]
 			self.lfp[c] = (np.linspace(t[0], t[-1], len(l)), l)
             s = filtfilt(self.spkfilt1[0], self.spkfilt1[1], v)
@@ -287,7 +333,7 @@ class Block():
 
 		self.snips = {}
 		for c in self.channellist:
-			self.snips[c] = self.getsnips(c)
+			self.snips[c] = self.getsnips(c, first=first, last=last)
 
 	def showfilters(self):
 		"""Plot frequency response for lfp and spikefilters.
@@ -300,75 +346,15 @@ class Block():
 		p.xscale('log')
 		p.title('lfp/spike freq response')
 			
-	def plot(self):
-        for c in self.channellist:
-            colors = 'krgbymrgbymrgbym'
-            
-            p.figure(figsize=(8, 10))
-            p.clf()
-            p.subplot(2,2,3)
-			t, v, sc = self.snips[c]
-			for n in range(v.shape[0]):
-				p.plot(1000*(t[n,:]-t[n,0]), 1e6*v[n,:],
-                       '%s-' % colors[sc[n]])
-            p.xlabel('time (ms)')
-            p.ylabel('voltage (uV)')
-            p.title('channel=%d' % c)
-
-            p.subplot(2,2,4)
-			t, v, sc = self.snips[c]
-            for code in np.unique(sc):
-                ix = np.where(sc==code)[0]
-                x = 1000*(t[n,:]-t[n,0])
-                y = 1e6 * np.mean(v[ix,:],0)
-                e = 1e6 * np.std(v[ix,:],0)
-                #e = np.std(v[ix,:],0) / sqrt(len(ix))
-                p.plot(x, y, '%s-' % colors[code])
-                p.fill_between(x, y-e, y+e, alpha=0.2, facecolor=colors[code])
-            p.xlabel('time (ms)')
-            p.autoscale(axis='x', tight=True)
-
-            p.subplot(6,1,1)
-            t, v = self.raw[c]
-            p.plot(t-t[0], v*1e6, 'k-')
-            p.ylabel('raw (uV)')
-            p.autoscale(axis='x', tight=True)
-            p.title(self.src)
-            
-            p.subplot(6,1,2)
-            t, v = self.lfp[c]
-            p.plot(t-t[0], v*1e6, 'r-')
-            p.autoscale(axis='x', tight=True)
-            p.ylabel('lfp (uV)')
-            
-            p.subplot(6,1,3)
-            t, v = self.spk[c]
-            p.plot(t-t[0], v*1e6, 'b-')
-            p.ylabel('spikes (uV)')
-            p.xlabel('time (s)')
-            p.autoscale(axis='x', tight=True)
-            
     def meansnip(self, channel, sortcode):
         t, v, sc = self.snips[channel]
         ix = np.where(sc==sortcode)[0]
         snip = np.mean(v[ix,:], 0)
         return snip
 
-    def refindsnips(self, channel, sortcode, nsig=2.0):
-        template = self.meansnip(channel, sortcode)
-        t, v = self.spk[channel]
-        t = t[:5000]
-        v = v[:5000]
-        y = convolve(v, template, mode='same')
-        s = np.where(np.diff((y>(nsig*np.std(y))).astype(np.int))==1)[0]
-        p.figure();
-        p.plot(t, v, 'k-')
-        p.plot(t[s], v[s], 'ro')
-
     def savemat(self, base):
         from scipy.io import savemat
 
-        # needs cs(n) stuff to work.. ugly and slow..
         savemat('%s-spk.mat' % base, self.spk, \
                 do_compression=True, oned_as='row')
         savemat('%s-lfp.mat' % base, self.lfp, \
@@ -376,8 +362,13 @@ class Block():
         savemat('%s-snip.mat' % base, self.snips, \
                 do_compression=True, oned_as='row')
 
-    def savehdf5(self, fname):
+    def savehdf5(self, fname, force=False):
         import h5py
+        
+        # don't overwrite existing files unless force==True
+        if os.path.exists(fname) and not force:
+            sys.stderr.write('%s already exists\n' % fname)
+            return
         f = h5py.File(fname, 'w')
         h = f.create_dataset('hdr/src', data=self.src)
         h = f.create_dataset('hdr/dacq_fs_hz', data=(self.fs,))
@@ -390,13 +381,13 @@ class Block():
                              compression='gzip')
         h.attrs['units'] = 's'
 
-        for k in range(3):
+        for k in range(1,3):
             if k == 0:
-                d,name = self.raw, 'RAW0'
+                d,name,filt = self.raw, 'RAW0', (-1,-1)
             elif k == 1:
-                d,name = self.spk, 'spk'
+                d,name,filt = self.spk, 'spk', (self.spikecut, self.spiketop)
             elif k == 2:
-                d,name = self.lfp, 'lfp'
+                d,name,filt = self.lfp, 'lfp', (-1, self.lfpcut)
 
             # save matrix times,c1,c2...cN x #samples:
             # need to save timebase for each signal since there's not
@@ -413,6 +404,7 @@ class Block():
                                  compression='gzip')
             h.attrs['fs_hz'] = fs
             h.attrs['units'] = 'V'
+            h.attrs['filters'] = '%s' % (filt,)
                     
         for c in self.channellist:
             t, v, sc = self.snips[c]
@@ -461,14 +453,23 @@ def gettanks(pypefile):
 if __name__ == '__main__':
     import pypedata as pd
     if len(sys.argv) < 2:
-        sys.stderr.write('usage: %s pypefiles..\n' % sys.argv[0])
+        sys.stderr.write('usage: %s [-force] pypefiles..\n' % sys.argv[0])
         sys.exit(1)
 
+    force = False
+    files = []
     for f in sys.argv[1:]:
+        if f == '-force':
+            force = True
+        else:
+            files.append(f)
+
+    for f in files:
         tankdir, blocklist = gettanks(f)
         for b in blocklist:
             print '%s -->' % f
             block = Block(tankdir, b)
-            block.getall()
-            print '  %s.hdf5' % block.src
-            block.savehdf5('%s.hdf5' % block.src)
+            for (k, a, b) in block.splits():
+                block.getall(first=a, last=b)
+                print '  %s%s.hdf5' % (block.src, k)
+                block.savehdf5('%s%s.hdf5' % (block.src, k), force=force)
