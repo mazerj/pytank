@@ -1,3 +1,6 @@
+%%%% THIS IS OBSOLETELY -- DON'T USE IT -- replaced by train.m
+
+
 function [templates, times, volts] = mktemplates(pf, force)
 %function [templates, times, volts] = mktemplates(pf, force)
 %
@@ -32,7 +35,7 @@ function [templates, times, volts] = mktemplates(pf, force)
 
 a = 15;                                 % nsamps before
 b = 20;                                 % nsamps after for snip
-nsig = 11;                              % default snip threshold
+nsig = 8;                              % default snip threshold
 npcs = 5;                               % use first n PCs for clustering
 PROJ = 0;                               % sort by projection (vs LSE)
 nc = 0;                                 % number of clusters
@@ -51,7 +54,7 @@ if ~force && exist(templatefile, 'file')
 end
 
 % otherwise, go ahead and generate sort templates
-[times, volts, ~] = hload(pf.src);
+[times, volts, ~, ~] = hload(pf.src);
 
 fs = 1.0 / (times(2)-times(1));
 
@@ -102,13 +105,6 @@ while 1
   [xx, yy, bb] = ginput(1);
   if bb == 27, break; end
   if bb == 1, nsig = abs(yy); end
-end
-
-m = max(abs(snips), [], 2);
-for n = 1:size(snips,1)
-  k = median(find(abs(snips(n,:)) == m(n)));
-  snips(n,:) = circshift(snips(n,:), a-k+1, 2);
-  events(n) = events(n)-k;
 end
 
 metrics = [];
@@ -251,13 +247,12 @@ else
 end
 
 if 0
-  colors='rgbmcyrgbmcyrgbmcy';
   for n = 1:size(metrics, 2)
     for k = 1:n
       subplot(size(metrics, 2), size(metrics, 2), (n-1)*size(metrics,2)+k);
       for cn = templates.units'
         ix = find(c == cn);
-        plot(metrics(ix,n), metrics(ix,k), [colors(cn) '.']);
+        plot(metrics(ix,n), metrics(ix,k), [pcolor(cn) '.']);
         hold on;
         axis off
       end

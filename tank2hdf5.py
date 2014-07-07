@@ -23,7 +23,8 @@ import types
 import time
 import sys
 
-MAXSEGS_PER_FILE = 100000
+#MAXSEGS_PER_FILE = 200000*100
+MAXSEGS_PER_FILE = 200000
 
 import numpy as np
 import pylab as p
@@ -121,24 +122,26 @@ class Block():
 
 		# skip records 0 & 1 (tdt-internal info/state)
 		for n in range(2, nrec):
+            ix = n - 2
+            
 			# parsing each record twice is not very efficient.. but
 			# this is not the speed bottle neck	 -- it's the data
 			# loading part.
 			a = s.unpack_from(buf, n*s.size)
-
-			self.size[n] = a[0]
-			self.type[n] = a[1]
-			self.icode[n] = a[2]
-			self.channel[n] = a[3]
-			self.sortcode[n] = a[4]
-			self.timestamp[n] = a[5]
-			self.offset[n] = a[6]
-			self.format[n] = a[7]
-			self.frequency[n] = a[8]
-			
 			b = s2.unpack_from(buf, n*s2.size)
-			self.strobe[n] = b[6]
+
+			self.size[ix] =      a[0]
+			self.type[ix] =      a[1]
+			self.icode[ix] =     a[2]
+			self.channel[ix] =   a[3]
+			self.sortcode[ix] =  a[4]
+			self.timestamp[ix] = a[5]
+			self.offset[ix] =    a[6]     # alternative 1
+			self.strobe[ix] =    b[6]     # alternative 2
+			self.format[ix] =    a[7]
+			self.frequency[ix] = a[8]
 			
+        # convert them all to numpy arrays for speed
 		self.size = np.array(self.size)
 		self.type = np.array(self.type)
 		self.icode = np.array(self.icode)
@@ -168,7 +171,7 @@ class Block():
         while a < self.nrec:
             b = min(a + MAXSEGS_PER_FILE, self.nrec)
             s.append((chr(ord('a')+n),a,b))
-            a = a + b
+            a = b
             n = n + 1
         return s
             
@@ -247,33 +250,21 @@ class Block():
 		"""Get snip data for specified channel.
 		Returns: time, voltage (2d arrays - nsnips x sniplen)
 		"""
-		if channel > 0:
-			ix = np.where(((self.icode == icode('eNeu')) | \
-						   (self.icode == icode('Snip'))) &
-						   (self.channel == channel) &
-                           (self.recno >= first) &
-                           (self.recno < last))[0]
-		else:
-			ix = np.where((self.icode == icode('eNeu')) | \
-						  (self.icode == icode('Snip')) &
-                          (self.recno >= first) &
-                          (self.recno < last))[0]
-                          
+		ix = np.where(((self.icode == icode('eNeu')) | \
+                       (self.icode == icode('Snip'))) &
+                       (self.channel == channel) &
+                       (self.recno >= first) &
+                       (self.recno < last))[0]
 		return self._getsegments(ix, snips=True)
 
-	def getraw(self, channel, first=0, last=+np.inf):
+	def getraw(self, channel, first=-np.inf, last=+np.inf):
 		"""Get raw 16bit voltage trace for channel over entire block.
 		Returns: time, voltage (1d vectors)
 		"""
-		if channel > 0:
-			ix = np.where((self.icode==icode('RAW0')) &
-						  (self.channel==channel) &
-                          (self.recno >= first) &
-                          (self.recno < last))[0]
-		else:
-			ix = np.where((self.icode==icode('RAW0')) &
-                          (self.recno >= first) &
-                          (self.recno < last))[0]
+		ix = np.where((self.icode==icode('RAW0')) &
+                      (self.channel==channel) &
+                      (self.recno >= first) &
+                      (self.recno < last))[0]
 		t, v = self._getsegments(ix)
 		return t.flatten(), v.flatten()
 
@@ -292,7 +283,7 @@ class Block():
 		"""
 		return hz / (self.fs / 2.0)
 
-	def getall(self, first=0, last=+np.inf):
+	def getall(self, first=-np.inf, last=+np.inf):
 		"""Pull all key from the tank into memory.
 		This includes generating spike and lfp waveforms by filtering
 		the RAW0 signal.
@@ -300,6 +291,7 @@ class Block():
 		
 		self.channellist = self.getchns()
 		self.start, self.stop = self.gettrials()
+
 		
 		self.raw = {}
 		for c in self.channellist:
@@ -352,17 +344,25 @@ class Block():
         snip = np.mean(v[ix,:], 0)
         return snip
 
-    def savemat(self, base):
-        from scipy.io import savemat
-
-        savemat('%s-spk.mat' % base, self.spk, \
-                do_compression=True, oned_as='row')
-        savemat('%s-lfp.mat' % base, self.lfp, \
-                do_compression=True, oned_as='row')
-        savemat('%s-snip.mat' % base, self.snips, \
-                do_compression=True, oned_as='row')
-
     def savehdf5(self, fname, force=False):
+        """hdf5 structure:
+
+        /hdr/src
+        /hdr/dacq_fs_hz
+        /hdr/channellist
+        /hdr/tr_starts
+        /hdr/tr_stops
+        /hdr/tr_stops
+        /continuous/RAW0  <- not included to save space!
+        /continuous/spk
+        /continuous/lfp
+        /snip/t   time base
+        /snip/v   voltage traces
+        /snip/ch  tdt dacq channel
+        /snip/sc  tdt sortcodes
+
+        """
+        
         import h5py
         
         # don't overwrite existing files unless force==True
@@ -389,14 +389,15 @@ class Block():
             elif k == 2:
                 d,name,filt = self.lfp, 'lfp', (-1, self.lfpcut)
 
-            # save matrix times,c1,c2...cN x #samples:
+            # save matrix c1,c2...cN x #samples:
             # need to save timebase for each signal since there's not
             # reason to assume they're all at same sampling rate..
+            # times can be calculated from the 'tzero' and 'tend' attributes
             m = np.zeros([d[self.channellist[0]][0].shape[0],
-                          1+len(self.channellist)])
-            m[:,0] = d[self.channellist[0]][0]   # times
-            fs = 1.0/(m[1,0]-m[0,0])
-            n = 1
+                          len(self.channellist)])
+            t = d[self.channellist[0]][0]   # sample times
+            fs = 1.0/(t[1]-t[0])
+            n = 0
             for c in self.channellist:
                 m[:,n] = d[c][1]
                 n = n + 1
@@ -405,6 +406,8 @@ class Block():
             h.attrs['fs_hz'] = fs
             h.attrs['units'] = 'V'
             h.attrs['filters'] = '%s' % (filt,)
+            h.attrs['tstart'] = t[0]
+            h.attrs['tend'] = t[-1]
                     
         for c in self.channellist:
             t, v, sc = self.snips[c]
