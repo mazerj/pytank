@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# generate hdf5 files for all tank data asocated with an exper
+
+if [ "$1" = "" ]; then
+  echo "usage: $(basename $0) [-force] exper"
+elif [ "$1" = "-force" ]; then
+  force="-force"
+  shift
+else
+  force=""
+fi
+dbfind $1 | xargs tank2hdf5.py $force

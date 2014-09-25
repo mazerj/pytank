@@ -2,8 +2,14 @@
 
 # generate hdf5 files from tanks associated with specified
 # pypefiles -- automatically skips 0000-training files.
+#
+# to convert all data for a given experiment try:
+#   % dbfind bert0334 | xargs tank2hdf5
+#
 
-if [ "$1" = "-force" ]; then
+if [ "$1" = "" ]; then
+  echo "usage: $(basename $0) [-force] pypefiles..."
+elif [ "$1" = "-force" ]; then
   force="-force"
   shift
 else

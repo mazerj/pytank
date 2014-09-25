@@ -1,7 +1,10 @@
-function templates = train(times, volts)
-%function templates = train(times, volts)
+function templates = train(pattern, nsig)
+%function templates = train(pattern, nsig)
 %
-% generate templates interactively from spike data
+% Generate templates interactively from spike data. This loads the
+% first segment (~10s) of data from the experiment and
+% interactively generates the initial template set that can then be
+% applied to the entire dataset.
 %
 %  left-click raw snip plots to select/unselect cluster(s) in lower
 %  left snip plot window
@@ -11,8 +14,8 @@ function templates = train(times, volts)
 %    'esc' save templates and terminate interactive mode
 %
 % INPUTS
-%   times - time stamps in s
-%   volts - voltage trace in volts
+%   pattern - exper/dbfind pattern for files to sort
+%   nsig    - optional initial n-sigma threshold (default 20)
 %
 % OUTPUTS
 %   templates - structure containing templates
@@ -24,9 +27,41 @@ function templates = train(times, volts)
 %             is just useful to have around.
 %
 
+% train with data from first segment from first datafile
+flist = dbfind(pattern, 'list', 'all');
+times = [];
+volts = [];
+trials = [];
+
+loaded = 0;
+while loaded < 3
+  for n = 1:length(flist)
+    if n > 1
+      times = [times NaN];
+      volts = [volts NaN];
+      trials = [trials; NaN NaN];
+    end
+    pf = p2mLoad2(flist{n});
+    seg = 1;
+    while loaded < 3
+      [t_, v_, tr_] = hload(pf, seg);
+      if isempty(t_)
+        break
+      end
+      times = [times t_];
+      volts = [volts v_];
+      trials = [trials; tr_];
+      seg = seg + 1;
+      loaded = loaded + 1;
+    end
+  end
+end
+
 a = 5;                                  % nsamps before
-b = 15;                                 % nsamps after for snip
-nsig = 20;                              % default snip threshold
+b = 10;                                 % nsamps after for snip
+if ~exist('nsig', 'var')
+  nsig = 3;                             % default snip threshold
+end
 nart = 3;                               % artifact th = nart * nsig
 npcs = 3;                               % use first n PCs for clustering
 nc = 0;                                 % number of clusters
@@ -41,29 +76,35 @@ vnorm = (volts - vmean) ./ vstd;
 
 oldfig = get(0, 'CurrentFigure');
 h = figure;
-set(gcf, 'MenuBar', 'none', 'ToolBar', 'none');
+%set(gcf, 'MenuBar', 'none', 'ToolBar', 'none');
 
+w = 2*max([a,b]);
 while 1
   oldpointer = get(gcf, 'pointer');
   set(gcf, 'pointer', 'watch'); drawnow;
 
   artifact = nsig * nart;               % anything exceeding this is artifact!
-  x = [(NaN * zeros([1 2*a])) vnorm (NaN * zeros([1 2*b]))];
+  y = [(NaN * zeros([1 2*a])) vnorm (NaN * zeros([1 2*b]))];
+  for k = find(abs(y) > artifact)
+    y((k-w):(k+w)) = NaN;
+  end
   t = [(NaN * zeros([1 2*a])) times (NaN * zeros([1 2*b]))];
   t = t - min(t);
-  [snips, events] = xsnips(x, a, b, nsig, artifact, 0.20);
+  [snips, events] = xsnips(y, a, b, nsig, artifact, 0.20);
   
   clf;
   subplot(2,1,1);
   skip = 10;
-  plot(t(1:skip:end), x(1:skip:end), '-');
+  plot(t(1:skip:end), y(1:skip:end), '-');
   if ~isempty(events)
     hold on;
-    plot(t(events+1), x(events+1), 'r.');
+    plot(t(events+1), y(events+1), 'r.');
     hold off;
   end
   hmarks(nsig, artifact);
   title(sprintf('nsig=%.1f nsnips=%d', nsig, size(snips,1)));
+
+  boxtitle('ADJUST THRESHOLD WITH MOUSE AND HIT SPACE');
   
   subplot(2,3,4);
   cla;
@@ -94,42 +135,55 @@ while 1
   end
   
   set(gcf, 'pointer', oldpointer); drawnow;
-  
+    
   subplot(2,3,5);
   [xx, yy, bb] = ginput(1);
-  if bb == 27, break; end
+  if bb == 27, return; end
+  if bb == 32, break; end
   if bb == 1, nsig = abs(yy); end
 end
+clf; drawnow;
 
 metrics = [];
 
-% pcs are "features" ((a+b) x (a+b), assuming (a+b) > nsnips..)
-% scores are the projections of each snip onto each feature
-% latent is the eigenvalues
+% project each spike on the 1st NPC principle components and
+% use scores as features for sorting
 [pcs, scores, latent] = pca(snips);
 metrics = [metrics scores(:,1:npcs)];
-
-% add a combination of hand-picked spike metrics (spike
-% heights, widths etc) and first n PCs as feature metrics
-% for clustering.
-
-if 0
-% note: this doesn't quite work right for monophasic spikes...
-% the tmin (or tmax) is not really correct in that case,
-% really need to do something like t > 1sigma..
-vmax = max(snips, [], 2);
-[~, tmax] = find(snips == repmat(vmax, [1 size(snips,2)]));
-vmin = min(snips, [], 2);
-[~, tmin] = find(snips == repmat(vmin, [1 size(snips,2)]));
-metrics = [metrics vmin vmax tmin tmax tmax-tmin];
+for n = 1:npcs
+  metricnames{n} = sprintf('pc%d', n);
 end
 
-metrics = [metrics snips(:,a)];                 % voltage at 'peak'
-metrics = [metrics mean(snips,2)];              % zscore is global,
-                                                % this is local..
-metrics = [metrics nansum(snips,2)];            % total area under snip
-metrics = [metrics nansum(max(0, snips), 2)];   % positive area
-metrics = [metrics nansum(min(0, snips), 2)];   % negative area
+% some additional hand-picked metrics: spike height etc
+smax = max(snips,[],2);
+smin = min(snips,[],2);
+sw = zeros(size(smax));
+for n=1:size(snips,1)
+  maxt = find(snips(n,:) == smax(n));
+  mint = find(snips(n,:) == smin(n));
+  sw(n) = mint-maxt;
+end
+metricnames{length(metricnames)+1} = 'width';
+metrics = [metrics ...
+           sw];
+metricnames{length(metricnames)+1} = 'maxmin';
+metrics = [metrics ...
+           smax-smin];
+metricnames{length(metricnames)+1} = 'peakv';
+metrics = [metrics ...
+           snips(:,a)];
+metricnames{length(metricnames)+1} = 'std';
+metrics = [metrics ...
+           std(snips')'];
+metricnames{length(metricnames)+1} = 'mean';
+metrics = [metrics ...
+           mean(snips,2)];
+metricnames{length(metricnames)+1} = 'parea';
+metrics = [metrics ...
+           nansum(max(0, snips), 2)];
+metricnames{length(metricnames)+1} = 'narea';
+metrics = [metrics ...
+           nansum(min(0, snips), 2)];
 
 % calculate best estimate for number of clusters
 eva = evalclusters(metrics, 'kmeans', 'CalinskiHarabasz', ...
@@ -155,8 +209,19 @@ while 1
     end
     c = c2;
   end
-    
   cs = unique(c);
+  
+  % sort clusters based on number of events in each cluster
+  count = [];
+  for cn = 1:length(cs)
+    count(cn) = sum(c==cs(cn));
+  end
+  [~, order] = sort(count, 2, 'descend');
+  oldc = c;
+  for n = 1:length(order)
+    c(find(oldc == order(n))) = n;
+  end
+    
   sp = [];
   clear templates
   templates.units = cs;
@@ -170,6 +235,8 @@ while 1
     if cn == 1, ylabel('zscore'); end
     vline(0, 'linestyle', '-');
     title(sprintf('#%d n=%d', cs(cn), sum(c==cs(cn))));
+
+    boxtitle('(m)erge or (r)eset sorts then SPACE to accept');
     
     subplot(4, length(cs), 2*length(cs)+cn);
     templates.t{cs(cn)} = tvs;
@@ -196,7 +263,14 @@ while 1
   waitfor(gcf, 'UserData');
   ch = get(gcf, 'UserData');
   switch ch
-    case {char(27), 'q', 'x'}           % done/exit
+    case {char(27)}                     % abort
+      return
+    case {' '}                          % ok/done/exit
+      v = get(sp(1), 'UserData');       % selected plots real..
+      if sum(v) == 0
+        v = v + 1;                      % select all by default
+      end
+      goodclusters = v;
       break
     case 'm'                            % merge
       v = get(sp(1), 'UserData');
@@ -218,7 +292,7 @@ while 1
       ;
   end
 end
-close(gcf);
+close(gcf); drawnow;
 if ~isempty(oldfig)
   figure(oldfig);
 end
@@ -229,31 +303,31 @@ templates.v = cell2mat(templates.v');
 templates.ve = cell2mat(templates.ve');
 templates.a = a;
 templates.b = b;
+templates.good = goodclusters;
 
 templates.nsig = nsig;                  % spike threshold (units of sigma)
 templates.art = nsig * nart;            % artifact thresh (units of sigma)
 
-if 0
-  templates.v(size(templates.v,1)+1,:) = nanmean(volts);
-  templates.ve(size(templates.ve,1)+1,:) = nanstd(volts);
-  templates.units = [templates.units; length(templates.units)+1]; 
-end
-
 if 1
-  for n = 1:size(metrics, 2)
-    for k = 1:n
-      subplot(size(metrics, 2), size(metrics, 2), (n-1)*size(metrics,2)+k);
+  for n = 2:size(metrics, 2)
+    for k = 1:(n-1)
+      subplot(size(metrics, 2)-1, size(metrics, 2)-1, ...
+              (n-1-1)*(size(metrics,2)-1)+k);
       for cn = templates.units'
         ix = find(c == cn);
-        plot(metrics(ix,n), metrics(ix,k), [pcolors(cn) '.']);
+        if templates.good(cn)
+          plot(metrics(ix,n), metrics(ix,k), [pcolors(cn) '.']);
+        else
+          plot(metrics(ix,n), metrics(ix,k), 'k.');
+        end
         hold on;
         axis equal
         axis square
         if n == size(metrics,2)
-          xlabel(k);
+          xlabel(metricnames{k});
         end
         if k == 1
-          ylabel(n);
+          ylabel(metricnames{n});
         end
       end
       hold off;

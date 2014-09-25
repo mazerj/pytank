@@ -4,16 +4,40 @@
 # Convert tdt tanks associaed with specified pypefile into
 # HDF5 data stores.  This is FAST!!!
 #
-# Each block is split into chunks of 100,000 segments to avoid
-# running out of memory on typical desktops when extracting the
-# raw signal traces. Each chunk gets it's own HDF5 file with
-# and 'a', 'b' ... suffix to indicate sequence order. Time base
-# is continues across chunks. Header information is the same
-# in all chunk files just to make things easy to load.
+# Each block is split into chunks of 50,000 segments (~10 mins) to
+# avoid running out of memory on typical desktops when extracting the
+# raw signal traces. Each chunk gets it's own HDF5 file with and 'a',
+# 'b' ... suffix to indicate sequence order. Time base is continues
+# across chunks. Header information is the same in all chunk files
+# just to make things easy to load.
 #
 # This application is not at all CPU intensive, but it is memory
 # intensive, so breaking it up into managable chunks prevents the
 # machine from locking up when converting big blocks/tanks/runs
+#
+#
+# HDF5 structure:
+#   /hdr                                general header info
+#   /hdr/dacq_fs_hz
+#   /hdr/src
+#   /hdr/tr_starts
+#   /hdr/tr_stops
+#   /continuous
+#   /continuous/lfp                     voltages for continues LFP waveform
+#     attr fs_hz: sampling rate
+#     attr units: 'V' for volts
+#     attr filters: (lp,hp)
+#     attr tstart,tend: timestamps
+#   /continuous/spk                     voltages for continuous spike waveform
+#     attr fs_hz: sampling rate
+#     attr units: 'V' for volts
+#     attr filters: (lp,hp)
+#     attr tstart,tend: timestamps
+#   /snip                               tdt generated snips
+#   /snip/ch                            dacq channel
+#   /snip/sc                            sort code
+#   /snip/t                             time (s)
+#   /snip/v                             voltage (v)
 #
 
 import os
@@ -23,8 +47,7 @@ import types
 import time
 import sys
 
-#MAXSEGS_PER_FILE = 200000*100
-MAXSEGS_PER_FILE = 200000
+MAXSEGS_PER_FILE = 50000
 
 import numpy as np
 import pylab as p
@@ -162,15 +185,15 @@ class Block():
 		print 'channels: ', self.getchns()
 
     def splits(self):
-        """Split block up into chunks of up to 100,000 records.
-        This is to avoid running out of memory during extraction.
+        """Split block up into chunks of up to MAXSEGS_PER_FILE records.
+        This is to avoid running out of memory during extraction or extraction.
         """
         s = []
         a = 0
         n = 0
         while a < self.nrec:
             b = min(a + MAXSEGS_PER_FILE, self.nrec)
-            s.append((chr(ord('a')+n),a,b))
+            s.append((('_%03d'%n),a,b,))
             a = b
             n = n + 1
         return s
@@ -432,6 +455,55 @@ class Block():
 
         f.close()
                 
+	def plot(self):
+        import pylab as p
+        
+        for c in self.channellist:
+            colors = 'krgbymrgbymrgbym'
+            
+            p.figure(figsize=(8, 10))
+            p.clf()
+            p.subplot(2,2,3)
+			t, v, sc = self.snips[c]
+			for n in range(v.shape[0]):
+				p.plot(1000*(t[n,:]-t[n,0]), 1e6*v[n,:],
+                       '%s-' % colors[sc[n]])
+            p.xlabel('time (ms)')
+            p.ylabel('voltage (uV)')
+            p.title('channel=%d' % c)
+
+            p.subplot(2,2,4)
+			t, v, sc = self.snips[c]
+            for code in np.unique(sc):
+                ix = np.where(sc==code)[0]
+                x = 1000*(t[n,:]-t[n,0])
+                y = 1e6 * np.mean(v[ix,:],0)
+                e = 1e6 * np.std(v[ix,:],0)
+                #e = np.std(v[ix,:],0) / sqrt(len(ix))
+                p.plot(x, y, '%s-' % colors[code])
+                p.fill_between(x, y-e, y+e, alpha=0.2, facecolor=colors[code])
+            p.xlabel('time (ms)')
+            p.autoscale(axis='x', tight=True)
+
+            p.subplot(6,1,1)
+            t, v = self.raw[c]
+            p.plot(t-t[0], v*1e6, 'k-')
+            p.ylabel('raw (uV)')
+            p.autoscale(axis='x', tight=True)
+            p.title(self.src)
+            
+            p.subplot(6,1,2)
+            t, v = self.lfp[c]
+            p.plot(t-t[0], v*1e6, 'r-')
+            p.autoscale(axis='x', tight=True)
+            p.ylabel('lfp (uV)')
+            
+            p.subplot(6,1,3)
+            t, v = self.spk[c]
+            p.plot(t-t[0], v*1e6, 'b-')
+            p.ylabel('spikes (uV)')
+            p.xlabel('time (s)')
+            p.autoscale(axis='x', tight=True)
         
 def gettanks(pypefile):
     """Get tankdir and list of all blocks references in pypefile.
@@ -456,7 +528,7 @@ def gettanks(pypefile):
 if __name__ == '__main__':
     import pypedata as pd
     if len(sys.argv) < 2:
-        sys.stderr.write('usage: %s [-force] pypefiles..\n' % sys.argv[0])
+        sys.stderr.write('usage: %s [-force] ..pypefiles..\n' % sys.argv[0])
         sys.exit(1)
 
     force = False
@@ -473,6 +545,7 @@ if __name__ == '__main__':
             print '%s -->' % f
             block = Block(tankdir, b)
             for (k, a, b) in block.splits():
+                outfile = '%s%s.th5' % (block.src, k,)
                 block.getall(first=a, last=b)
-                print '  %s%s.hdf5' % (block.src, k)
-                block.savehdf5('%s%s.hdf5' % (block.src, k), force=force)
+                print '  %s' % (outfile,)
+                block.savehdf5('%s' % (outfile,), force=force)
