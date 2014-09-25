@@ -14,7 +14,13 @@ for n = 1:length(flist)
   times = []; volts = [];
   while 1
     [t_, v_, ~] = hload(pf, seg);
-    if isempty(t_), break; end
+    if isempty(t_)
+      if seg == 1
+        error('no hdf5: %s; run exper2hdf5', basename(pf.src))
+      else
+        break
+      end
+    end
     v_ = v_ * 1e6;
     t_ = t_ / 60;
     maxrms = max([maxrms std(v_)]);
