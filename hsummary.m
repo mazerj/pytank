@@ -1,5 +1,17 @@
-function hsummary(pattern)
+function hsummary(pattern, hide)
 
+if ~exist('hide', 'var')
+  hide = 0;
+end
+
+fig = figure;
+if hide
+  set(fig, 'visible', 'off');
+end
+pos = get(fig, 'position');
+pos(3) = 700;
+pos(4) = 900;
+set(gcf, 'position', pos);
 clf;
 dt = 40;
 
@@ -23,36 +35,41 @@ for n = 1:length(flist)
     end
     v_ = v_ * 1e6;
     t_ = t_ / 60;
-    maxrms = max([maxrms std(v_)]);
+    ve = nanstd(v_);
+    maxrms = max([maxrms ve]);
     
     times = t_(1:dt:end);
     volts = v_(1:dt:end);
     if seg == 1
       t0 = times(1);
     end
-    seg = seg + 1;
+    
+    subplot(1+length(flist), 1, 1);
+    plot(globaloffset+(times-t0), volts, c(rem(n,2)+1));
+    hold on;
+    ylabel('uV');
+    xlabel('time (min)');
+    title(sprintf('%s [lines indicate ~ +-5sig]', pattern));
     
     subplot(1+length(flist), 1, n+1);
     plot(times-t0, volts);
     hold on;
-    ylabel(basename(pf.src));
-    set(get(gca, 'ylabel'), 'Rotation', 70);
+    ylabel(strsplit(basename(pf.src), '.'));
     xlabel('time (min)');
-
-    subplot(1+length(flist), 1, 1);
-    plot(globaloffset+(times-t0), volts, c(rem(n,2)+1));
-    hold on;
-    ylabel('voltage (uv)');
-    set(get(gca, 'ylabel'), 'Rotation', 70);
-    xlabel('time (min)');
-    title(pattern);
-    
     drawnow;
+    
+    seg = seg + 1;
   end
-  globaloffset = globaloffset + (times(end)-t0) + .2;
+  hline(5*ve, 'color', 'r', 'linestyle', '-');
+  hline(-5*ve, 'color', 'r', 'linestyle', '-');
+  globaloffset = globaloffset + (times(end)-t0) + 0;
 end
 
 for n = 0:length(flist)
   subplot(1+length(flist), 1, n+1);
   yrange(-20*maxrms, 20*maxrms);
+end
+
+if hide
+  set(fig, 'visible', 'on');
 end

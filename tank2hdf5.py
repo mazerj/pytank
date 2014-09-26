@@ -1,8 +1,12 @@
 #!/usr/bin/env pypenv
 # -*- Mode: Python; tab-width: 4; py-indent-offset: 4; -*-
 #
-# Convert tdt tanks associaed with specified pypefile into
-# HDF5 data stores.  This is FAST!!!
+# Convert tdt tanks associated with specified pypefile into HDF5 data
+# stores.  This is FAST!!!
+#
+# Note -- this really converts tank blocks, but when run as a program
+# it takes a pype datafile and then tracks down all the tanks and
+# blocks associated with the file and converts them all.
 #
 # Each block is split into chunks of 50,000 segments (~10 mins) to
 # avoid running out of memory on typical desktops when extracting the
@@ -505,28 +509,30 @@ class Block():
             p.xlabel('time (s)')
             p.autoscale(axis='x', tight=True)
         
-def gettanks(pypefile):
-    """Get tankdir and list of all blocks references in pypefile.
-    """
-    import pypedata as pd
-
-    pf = pd.PypeFile(pypefile)
-    n = 0
-    blocks = {}
-    while 1:
-        rec = pf.nth(n)
-        if rec is None:
-            break
-        if n == 0:
-            tankdir = string.replace(rec.params['tdt_tank'], \
-                                     'C:\\DataTanks\\', \
-                                     '/auto/data/critters/DataTanks/')
-        blocks[rec.params['tdt_block']] = 1
-        n += 1
-    return tankdir, blocks.keys()
-
 if __name__ == '__main__':
     import pypedata as pd
+    H5DUMP = '/auto/th5'
+
+    def getblocks(pypefile):
+        """Get tankdir and list of all blocks references in pypefile.
+        """
+        import pypedata as pd
+
+        pf = pd.PypeFile(pypefile)
+        n = 0
+        blocks = {}
+        while 1:
+            rec = pf.nth(n)
+            if rec is None:
+                break
+            if n == 0:
+                tankdir = string.replace(rec.params['tdt_tank'], \
+                                         'C:\\DataTanks\\', \
+                                         '/auto/data/critters/DataTanks/')
+            blocks[rec.params['tdt_block']] = 1
+            n += 1
+        return tankdir, blocks.keys()
+    
     if len(sys.argv) < 2:
         sys.stderr.write('usage: %s [-force] ..pypefiles..\n' % sys.argv[0])
         sys.exit(1)
@@ -540,12 +546,23 @@ if __name__ == '__main__':
             files.append(f)
 
     for f in files:
-        tankdir, blocklist = gettanks(f)
+        if f.find('0000') > 0:
+            # always skip 'training' files with no physiology data
+            continue
+        tankdir, blocklist = getblocks(f)
         for b in blocklist:
             print '%s -->' % f
             block = Block(tankdir, b)
             for (k, a, b) in block.splits():
-                outfile = '%s%s.th5' % (block.src, k,)
+                if H5DUMP:
+                    base = string.join(block.src.split('/')[-2:], '-')
+                    outfile = '%s/%s%s.th5' % (H5DUMP, base, k,)
+                else:
+                    outfile = '%s%s.th5' % (block.src, k,)
                 block.getall(first=a, last=b)
                 print '  %s' % (outfile,)
-                block.savehdf5('%s' % (outfile,), force=force)
+                try:
+                    block.savehdf5('%s' % (outfile,), force=force)
+                except IOError:
+                    sys.stderr.write('Can''t write: %s\n' % outfile)
+                    sys.exit(1)

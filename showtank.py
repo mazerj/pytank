@@ -4,13 +4,13 @@
 import sys
 import pylab as p
 import pypedata as pd
-from tank2hdf5 import Block, gettanks
+from tank2hdf5 import Block, getblocks
 
 if len(sys.argv) < 2:
     sys.stderr.write('usage: %s [^]pypefile\n' % sys.argv[0])
     sys.exit(1)
     
-tankdir, blocklist = gettanks(sys.argv[1])
+tankdir, blocklist = getblocks(sys.argv[1])
 for b in blocklist:
     block = Block(tankdir, b)
     block.getall()
