@@ -9,6 +9,7 @@ function [times, volts, trials] = hload(pf, seg, channel)
 % INPUTS
 %   pf - pypefile struct from p2mLoad()
 %   seg - seg num to load
+%   channel - defaults to 1
 %
 % OUTPUTS
 %   times - vector of times (secs)
@@ -17,9 +18,10 @@ function [times, volts, trials] = hload(pf, seg, channel)
 %
 %   if isempty(times), then you asked for a segment past end of file.
 %
-%  NOTE: this is hard coded to pull data from CHANNEL 1!!!
-%    see data(1,:) line below..
-
+% NOTES
+%   if the trial start/stop boundaries span a segment border, you
+%   need to be careful re-assembling the continuous data record!
+%
 
 H5DUMP='/auto/th5';
 
@@ -52,7 +54,20 @@ tend = h5readatt(hf, '/continuous/spk', 'tend');
 t = linspace(tstart, tend, size(data, 2));
 times = [times t];
 volts = [volts data(channel,:)];
-trials = [h5read(hf, '/hdr/tr_starts') h5read(hf, '/hdr/tr_stops')];
+% this is a problem -- what happens when the segment splits
+% a trial:
+%   trials = [h5read(hf, '/hdr/tr_starts') h5read(hf, '/hdr/tr_stops')];
+
+starts = h5read(hf, '/hdr/tr_starts');
+stops = h5read(hf, '/hdr/tr_stops');
+if length(starts) > length(stops)
+  % stop event is in next segment:
+  stops = [stops; NaN];
+elseif length(starts) < length(stops)
+  % start event is in previous segment:
+  starts = [NaN; starts];
+end
+trials = [starts stops];
 
 fprintf('%s (%.1fs)\n', hf, t(end)-t(1));
 

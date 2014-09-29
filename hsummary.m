@@ -1,6 +1,13 @@
-function hsummary(pattern, hide)
+function hsummary(pattern, channel, hide)
+%function hsummary(pattern, channel, hide)
+%
+%  generate summary plot of raw data stream
 
-if ~exist('hide', 'var')
+if ~exist('channel', 'var') || isempty(channel)
+  channel = 1;
+end
+
+if ~exist('hide', 'var') || isempty(hide)
   hide = 0;
 end
 
@@ -25,7 +32,7 @@ for n = 1:length(flist)
   seg = 1;
   times = []; volts = [];
   while 1
-    [t_, v_, ~] = hload(pf, seg);
+    [t_, v_, ~] = hload(pf, seg, channel);
     if isempty(t_)
       if seg == 1
         error('no hdf5: %s; run exper2hdf5', basename(pf.src))
@@ -72,4 +79,5 @@ end
 
 if hide
   set(fig, 'visible', 'on');
+  drawnow;
 end
