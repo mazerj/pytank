@@ -10,4 +10,4 @@ install:
 
 
 clean:
-	/bin/rm *.pyc \#*~
+	@/bin/rm -f *.pyc \#*~
