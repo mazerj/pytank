@@ -318,6 +318,8 @@ class Block():
 		
 		self.channellist = self.getchns()
 		self.start, self.stop = self.gettrials()
+		if len(self.channellist) < 1:
+			return False
 
 		
 		self.raw = {}
@@ -353,6 +355,8 @@ class Block():
 		self.snips = {}
 		for c in self.channellist:
 			self.snips[c] = self.getsnips(c, first=first, last=last)
+
+		return True
 
 	def showfilters(self):
 		"""Plot frequency response for lfp and spikefilters.
@@ -559,10 +563,12 @@ if __name__ == '__main__':
                     outfile = '%s/%s%s.th5' % (H5DUMP, base, k,)
                 else:
                     outfile = '%s%s.th5' % (block.src, k,)
-                block.getall(first=a, last=b)
-                print '  %s' % (outfile,)
-                try:
-                    block.savehdf5('%s' % (outfile,), force=force)
-                except IOError:
-                    sys.stderr.write('Can''t write: %s\n' % outfile)
-                    sys.exit(1)
+                if block.getall(first=a, last=b):
+				    print '  %s' % (outfile,)
+					try:
+						block.savehdf5('%s' % (outfile,), force=force)
+					except IOError:
+						sys.stderr.write('Can''t write: %s\n' % outfile)
+						sys.exit(1)
+				else:
+				    print '  no trials.'
