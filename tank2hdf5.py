@@ -10,8 +10,8 @@
 #
 # Each block is split into chunks of 50,000 segments (~10 mins) to
 # avoid running out of memory on typical desktops when extracting the
-# raw signal traces. Each chunk gets it's own HDF5 file with and 'a',
-# 'b' ... suffix to indicate sequence order. Time base is continues
+# raw signal traces. Each chunk gets it's own sequentially numbered
+# HDF5 file to allow resequencing on load. Time base is continues
 # across chunks. Header information is the same in all chunk files
 # just to make things easy to load.
 #
@@ -52,6 +52,8 @@ import time
 import sys
 
 MAXSEGS_PER_FILE = 50000
+H5DUMP = '/auto/th5'
+        
 
 import numpy as np
 import pylab as p
@@ -512,31 +514,28 @@ class Block():
             p.ylabel('spikes (uV)')
             p.xlabel('time (s)')
             p.autoscale(axis='x', tight=True)
+            
+def getblocks(pypefile):
+    """Get tankdir and list of all blocks references in pypefile.
+    """
+    import pypedata as pd
+
+    pf = pd.PypeFile(pypefile)
+    n = 0
+    blocks = {}
+    while 1:
+        rec = pf.nth(n)
+        if rec is None:
+            break
+        if n == 0:
+            tankdir = string.replace(rec.params['tdt_tank'], \
+                                     'C:\\DataTanks\\', \
+                                     '/auto/data/critters/DataTanks/')
+        blocks[rec.params['tdt_block']] = 1
+        n += 1
+    return tankdir, blocks.keys()
         
 if __name__ == '__main__':
-    import pypedata as pd
-    H5DUMP = '/auto/th5'
-
-    def getblocks(pypefile):
-        """Get tankdir and list of all blocks references in pypefile.
-        """
-        import pypedata as pd
-
-        pf = pd.PypeFile(pypefile)
-        n = 0
-        blocks = {}
-        while 1:
-            rec = pf.nth(n)
-            if rec is None:
-                break
-            if n == 0:
-                tankdir = string.replace(rec.params['tdt_tank'], \
-                                         'C:\\DataTanks\\', \
-                                         '/auto/data/critters/DataTanks/')
-            blocks[rec.params['tdt_block']] = 1
-            n += 1
-        return tankdir, blocks.keys()
-    
     if len(sys.argv) < 2:
         sys.stderr.write('usage: %s [-force] ..pypefiles..\n' % sys.argv[0])
         sys.exit(1)
