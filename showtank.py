@@ -9,7 +9,9 @@ from tank2hdf5 import Block, getblocks
 if len(sys.argv) < 2:
     sys.stderr.write('usage: %s [^]pypefile\n' % sys.argv[0])
     sys.exit(1)
-    
+
+p.ion()
+
 tankdir, blocklist = getblocks(sys.argv[1])
 for b in blocklist:
     block = Block(tankdir, b)
