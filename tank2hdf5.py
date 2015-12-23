@@ -533,6 +533,9 @@ def getblocks(pypefile):
                                      '/auto/data/critters/DataTanks/')
         blocks[rec.params['tdt_block']] = 1
         n += 1
+    if n < 1:
+        sys.stderr.write('%s empty or not pypefile\n' % pypefile)
+        sys.exit(1)
     return tankdir, blocks.keys()
         
 if __name__ == '__main__':
