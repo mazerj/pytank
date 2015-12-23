@@ -23,18 +23,34 @@ function [times, volts, trials] = hload(pf, seg, channel)
 %   need to be careful re-assembling the continuous data record!
 %
 
-H5DUMP='/auto/th5';
-
 if ~exist('channel', 'var')
   channel=1;
 end
 
-blocks = tdtblocks(pf);
+if ~exist('seg', 'var') || seg == 0
+  times = [];
+  volts = [];
+  trials = [];
+  seg = 1;
+  while 1
+    [t, v, tr] = hload(pf, seg, channel);
+    if isempty(t)
+      return
+    else
+      times = [times t];
+      volts = [volts v];
+      trials = [trials tr];
+      seg = seg + 1;
+    end
+  end
+end
+
+blocks = list_blocks(pf);
 
 hfiles = {};
 for n = 1:length(blocks)
   b = strsplit(blocks{n}, '/');
-  files = jls(sprintf('%s/%s-%s_???.th5', H5DUMP, b{end-1}, b{end}));
+  files = jls(sprintf('%s/%s-%s_???.th5', h5dump, b{end-1}, b{end}));
   for k = 1:length(files)
     hfiles{length(hfiles)+1} = files{k};
   end
@@ -71,26 +87,3 @@ trials = [starts stops];
 
 fprintf('%s (%.1fs)\n', hf, t(end)-t(1));
 
-function blocks = tdtblocks(pf)
-%function blocks = tdtblocks(pf)
-%
-% get list of tdt blocks (including name mangling from local
-% storage target to raid location) containing analog data
-% traces for specified pypefile.
-%
-% INPUTS
-%  pf - pypefile struct from p2mLoad
-%
-% OUTPUTS
-%  blocks - cell array list of block names
-%
-
-blocks = {};
-for n = 1:length(pf.rec)
-  t = pf.rec(n).params.tdt_tank;
-  t = strrep(t, '\', '/');
-  t = strrep(t, 'C:', '/auto/data/critters');
-  t = [t '/' pf.rec(n).params.tdt_block];
-  blocks{n} = t;
-end
-blocks = unique(blocks);
