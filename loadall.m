@@ -14,6 +14,7 @@ end
 
 pflist = dbfind(exper, 'list', 'all')';
 
+tank.exper = exper;
 tank.pypefiles = pflist;                % p2m/pf #'d source files
 tank.snips_v = [];                      % snip voltage trace
 tank.snips_t = [];                      % snip time base (file relative)
@@ -26,7 +27,7 @@ tank.highpass_pfn = [];                 % HP source file #
 tank.lowpass = [];                      % continuous LP voltage trace
 tank.lowpass_t = [];                    % continuous LP time trace
 tank.lowpass_pfn = [];                  % LP source file #
-tank.t0 = NaN;
+tank.t0 = 0;
 
 
 for pfn = 1:length(tank.pypefiles)
@@ -47,7 +48,7 @@ for pfn = 1:length(tank.pypefiles)
     end
   end
   
-  if isnan(tank.t0)
+  if 0 & isnan(tank.t0)
     % time for very first data sample in entire dataset
     tank.t0 = h5readatt(hfiles{1}, '/continuous/spk', 'tstart');
   end

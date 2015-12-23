@@ -1,3 +1,4 @@
 function c = pcolors(n)
-colors = 'rgbymck';
-c = colors(mod(n-1, length(colors)) + 1);
+colors = 'kyrckyrc';
+%c = colors(mod(n-1, length(colors)) + 1);
+c = colors(n+1);
