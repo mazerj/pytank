@@ -1,5 +1,5 @@
-function tank = loadall(exper, what)
-%function loadall(exper, what)
+function tank = th5loadall(exper, what)
+%function th5loadall(exper, what)
 %
 % load all data associated with experiment (multiple pypefiles)
 %
