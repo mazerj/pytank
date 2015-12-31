@@ -14,7 +14,7 @@ loading speed of the HDF5 files makes it worth the time.
 
 matlab tank tools
 ------------------------------
-h5dump.m				pointer to where the hdf5 files are cached (global)
+th5dump.m				pointer to where the hdf5 files are cached (global)
 list_tdtblocks.m		get list of tdt block names from pypefiles
 loadall.m				load all tank data associated with an 'exper'
 showsnips.m				make plot of randomly selected subset of snips

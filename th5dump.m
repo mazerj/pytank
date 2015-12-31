@@ -1,3 +1,3 @@
-function d = h5dump
+function d = th5dump
 % return dir where hdf5 tanks are dumped
 d = '/auto/th5';

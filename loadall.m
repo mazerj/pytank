@@ -42,7 +42,7 @@ for pfn = 1:length(tank.pypefiles)
     blk = strsplit(blocks{bn}, '/');
     % for each block, find all segment files
     
-    segfiles = jls(sprintf('%s/%s-%s_???.th5', h5dump, blk{end-1}, blk{end}));
+    segfiles = jls(sprintf('%s/%s-%s_???.th5', th5dump, blk{end-1}, blk{end}));
     for n = 1:length(segfiles)
       hfiles{length(hfiles)+1} = segfiles{n};
     end
