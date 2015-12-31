@@ -1,6 +1,17 @@
 function showsnips(tank)
+%function showsnips(tank)
+%
+% Show on-line sorted snips tdt datasets. This generates
+% per-channel plots of average snip shapes, isi's etc..
+% 
+%INPUT
+%  tank - data tank structure -- only snip data are required!
+%
+%OUTPUT
+%  none
+%
 
-SHOW = 1000;
+MAXSHOW = 1000;
 
 x = unique([tank.snips_ch tank.snips_sc], 'rows');
 
@@ -12,10 +23,10 @@ for ch = chs
   for sc = scs
     ix = find(tank.snips_ch == ch & tank.snips_sc == sc);
     ix = ix(randperm(length(ix)));
-    rix = ix(1:min(SHOW, length(ix)));
+    rix = ix(1:min(MAXSHOW, length(ix)));
     plot(1:size(tank.snips_v, 2), ...
          1e6 * tank.snips_v(rix, :)', ...
-         [pcolors(sc) '-']);
+         [tdtsnipcolors(sc) '-']);
     hold on;
   end
   title(sprintf('raw ch=%d', ch));
@@ -34,8 +45,8 @@ for ch = chs
     ls = eplot(1:size(tank.snips_v, 2), ....
                1e6*mean(tank.snips_v(ix, :), 1), ...
                1e6*std(tank.snips_v(ix, :), 1));
-    set(ls(2), 'Color', pcolors(sc));
-    set(ls(1), 'FaceColor', pcolors(sc), 'FaceAlpha', 0.3);
+    set(ls(2), 'Color', tdtsnipcolors(sc));
+    set(ls(1), 'FaceColor', tdtsnipcolors(sc), 'FaceAlpha', 0.3);
     hold on;
   end
   title(sprintf('mean{\\pm}std ch=%d', ch));
@@ -54,7 +65,7 @@ for ch = chs
     ix = find(tank.snips_ch == ch & tank.snips_sc == sc);
     counts = hist(diff(tank.snips_t(ix, 1)), bins);
     counts = counts ./ length(diff(tank.snips_t(ix, 1)));
-    plot(centers(1:end-1)*1000, counts(1:end-1), [pcolors(sc) 'o-']);
+    plot(centers(1:end-1)*1000, counts(1:end-1), [tdtsnipcolors(sc) 'o-']);
     hold on;
   end
   xlabel('isi (ms)');
@@ -68,4 +79,19 @@ for ch = chs
 end
 
 boxtitle(tank.exper);
+
+function ls = eplot(x, y, ye)
+%function ls = eplot(x, y, ye)
+%
+% Uses eshade to generate nice looking simple x,y,error plots in
+% one function call.
+%
+
+if ~ishold
+  cla;                                  % otherwise old eshade's persist..
+end
+h = ishold;
+hold on;
+ls = [eshade(x, y, ye); plot(x, y, 'r-')];
+if ~h, hold off, end;
 
