@@ -559,7 +559,12 @@ if __name__ == '__main__':
         if f.find('0000') > 0:
             # always skip 'training' files with no physiology data
             continue
-        tankdir, blocklist = getblocks(f)
+        try:
+            tankdir, blocklist = getblocks(f)
+        except IOError:
+            sys.stderr.write("warning: can't read %s.\n" % f)
+            continue
+                
         for b in blocklist:
             print '%s -->' % f
             block = Block(tankdir, b)
