@@ -527,12 +527,16 @@ def getblocks(pypefile):
         rec = pf.nth(n)
         if rec is None:
             break
-        if n == 0:
-            tankdir = string.replace(rec.params['tdt_tank'], \
-                                     'C:\\DataTanks\\', \
-                                     '/auto/data/critters/DataTanks/')
-        blocks[rec.params['tdt_block']] = 1
+        if rec.params.has_key('tdt_tank') and rec.params.has_key('tdt_block'):
+            if n == 0:
+                tankdir = string.replace(rec.params['tdt_tank'], \
+                                         'C:\\DataTanks\\', \
+                                         '/auto/data/critters/DataTanks/')
+            blocks[rec.params['tdt_block']] = 1
         n += 1
+    if len(blocks) < 1:
+        sys.stderr.write('%s no associated tank!\n' % pypefile)
+        sys.exit(1)
     if n < 1:
         sys.stderr.write('%s empty or not pypefile\n' % pypefile)
         sys.exit(1)
