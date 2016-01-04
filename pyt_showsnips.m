@@ -1,5 +1,5 @@
-function th5showsnips(tank)
-%function th5showsnips(tank)
+function pyt_showsnips(tank)
+%function pyt_showsnips(tank)
 %
 % Show on-line sorted snips tdt datasets. This generates
 % per-channel plots of average snip shapes, isi's etc..

@@ -3,7 +3,7 @@ DEST=/auto/share/pypeextra
 
 install:
 	chmod +x tank2hdf5.py; cp tank2hdf5.py $(DEST)
-	chmod +x exper2hdf5.sh; cp exper2hdf5.sh $(DEST)/exper2hdf5
+	chmod +x exper2pyt.sh; cp exper2pyt.sh $(DEST)/exper2pyt
 	chmod +x getexpers.sh; cp getexpers.sh $(DEST)/getexpers
 	cp *.m $(DEST)
 
