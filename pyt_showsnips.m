@@ -5,15 +5,13 @@ function pyt_showsnips(tank)
 % per-channel plots of average snip shapes, isi's etc..
 % 
 %INPUT
-%  tank - data tank structure -- only snip data are required!
+%  tank - data tank structure from pyt_load() -- only snip data are required!
 %
 %OUTPUT
 %  none
 %
 
 MAXSHOW = 1000;
-
-x = unique([tank.snips_ch tank.snips_sc], 'rows');
 
 np = 1;
 chs = unique(tank.snips_ch);
