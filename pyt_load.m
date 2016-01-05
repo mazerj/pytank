@@ -8,6 +8,13 @@ function tank = pyt_load(exper, what)
 %   'h' for high-pass continuous spike signal
 %   'l' for low-pass continuous lfp signal
 
+try
+  DUMP = HDF5DUMP;
+catch
+  DUMP = '/auto/th5';
+  warning('loading from /auto/th5');
+end
+
 if ~exist('what', 'var') || isempty('what')
   what = 'shl';                         % load everything
 end
@@ -15,24 +22,24 @@ end
 pflist = dbfind(exper, 'list', 'all')';
 
 tank.exper = exper;
-tank.pypefiles = pflist;                % p2m/pf #'d source files
+tank.srcs = pflist;                % p2m/pf #'d source files
 tank.snips_v = [];                      % snip voltage trace
 tank.snips_t = [];                      % snip time base (file relative)
 tank.snips_ch = [];                     % snip channel
 tank.snips_sc = [];                     % snip sort code (0=unsorted)
-tank.snips_pfn = [];                    % snip source file #
+tank.snips_srcn = [];                   % snip source file #
 tank.highpass = [];                     % continuous HP voltage trace
 tank.highpass_t = [];                   % continuous HP time trace
-tank.highpass_pfn = [];                 % HP source file #
+tank.highpass_srcn = [];                % HP source file #
 tank.lowpass = [];                      % continuous LP voltage trace
 tank.lowpass_t = [];                    % continuous LP time trace
-tank.lowpass_pfn = [];                  % LP source file #
+tank.lowpass_srcn = [];                 % LP source file #
 tank.t0 = 0;
 
 
-for pfn = 1:length(tank.pypefiles)
-  fprintf('%s\n', tank.pypefiles{pfn});
-  pf = p2mLoad2(tank.pypefiles{pfn});
+for pfn = 1:length(tank.srcs)
+  fprintf('%s\n', tank.srcs{pfn});
+  pf = p2mLoad2(tank.srcs{pfn});
 
   % get list of all tank blocks referenced in pypefile
   blocks = list_tdtblocks(pf);
@@ -43,7 +50,7 @@ for pfn = 1:length(tank.pypefiles)
     % for each block, find all segment files
     
     segfiles = jls(sprintf('%s/%s-%s_???.th5', ...
-                           HDF5DUMP, blk{end-1}, blk{end}));
+                           DUMP, blk{end-1}, blk{end}));
     for n = 1:length(segfiles)
       hfiles{length(hfiles)+1} = segfiles{n};
     end
@@ -62,7 +69,7 @@ for pfn = 1:length(tank.pypefiles)
       tank.snips_ch = [tank.snips_ch; h5read(hf, '/snip/ch')];
       sc = h5read(hf, '/snip/sc');
       tank.snips_sc = [tank.snips_sc; sc];
-      tank.snips_pfn = [tank.snips_pfn; uint16(pfn + zeros(size(sc)))];
+      tank.snips_srcn = [tank.snips_srcn; uint16(pfn + zeros(size(sc)))];
     end
   end
 
@@ -75,7 +82,7 @@ for pfn = 1:length(tank.pypefiles)
                    length(v))';
       tank.highpass = [tank.highpass; v];
       tank.highpass_t = [tank.highpass_t; t-tank.t0];
-      tank.highpass_pfn = [tank.highpass_pfn; uint16(pfn + zeros(size(v)))];
+      tank.highpass_srcn = [tank.highpass_srcn; uint16(pfn + zeros(size(v)))];
     end
   end
 
@@ -88,7 +95,7 @@ for pfn = 1:length(tank.pypefiles)
                    length(v))';
       tank.lowpass = [tank.lowpass; v];
       tank.lowpass_t = [tank.lowpass_t; t-tank.t0];
-      tank.lowpass_pfn = [tank.lowpass_pfn; uint16(pfn + zeros(size(v)))];
+      tank.lowpass_srcn = [tank.lowpass_srcn; uint16(pfn + zeros(size(v)))];
     end
   end
 end
