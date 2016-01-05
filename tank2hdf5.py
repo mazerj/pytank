@@ -51,9 +51,13 @@ import types
 import time
 import sys
 
+# if DUMP is set to '.', dump into current dir
+try:
+    DUMPDIR = HDF5DUMP
+except:
+    DUMPDIR = '.'
+
 MAXSEGS_PER_FILE = 50000
-H5DUMP = '/auto/th5'
-        
 
 import numpy as np
 import pylab as p
@@ -569,11 +573,8 @@ if __name__ == '__main__':
             print '%s -->' % f
             block = Block(tankdir, b)
             for (k, a, b) in block.splits():
-                if H5DUMP:
-                    base = string.join(block.src.split('/')[-2:], '-')
-                    outfile = '%s/%s%s.th5' % (H5DUMP, base, k,)
-                else:
-                    outfile = '%s%s.th5' % (block.src, k,)
+                base = string.join(block.src.split('/')[-2:], '-')
+                outfile = '%s/%s%s.th5' % (DUMPDIR, base, k,)
                 if block.getall(first=a, last=b):
 				    print '  %s' % (outfile,)
 					try:
