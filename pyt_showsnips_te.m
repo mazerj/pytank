@@ -5,7 +5,7 @@ function pyt_showsnips_te(tank, style, mode)
 % 
 %INPUT
 %  tank - data tank structure from pyt_load() -- only snip data are required!
-%  style - 'h' or 'v' for emphasis on files vs sorts, respectively
+%  style - 'h', 'v' or 'hv' for emphasis on files vs sorts, respectively
 %  mode - 'raw' or 'mean'
 %
 %  for 'h' style, all sorts in each data file are plotted by
@@ -24,11 +24,14 @@ if ~exist('mode', 'var')
   mode = 'mean';
 end
 
-switch style(1)
+switch style
   case 'h'
     plot_h(tank, mode);
-  otherwise
+  case 'v'
     plot_v(tank, mode);
+  case 'hv'
+    figure;plot_h(tank, mode);
+    figure;plot_v(tank, mode);
 end
 
 boxtitle(tank.exper);
@@ -127,7 +130,7 @@ ix = 6;
 t0 = mean(tbase(ix));
 tbase = tbase-t0;
 
-ysep = .4*vrange;
+ysep = .25*vrange;
 
 clf;
 np = 1;
