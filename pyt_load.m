@@ -80,9 +80,10 @@ for pfn = 1:length(tank.srcs)
       t = linspace(h5readatt(hf, '/continuous/spk', 'tstart'), ...
                    h5readatt(hf, '/continuous/spk', 'tend'), ...
                    length(v))';
-      tank.highpass = [tank.highpass; v];
-      tank.highpass_t = [tank.highpass_t; t-tank.t0];
-      tank.highpass_srcn = [tank.highpass_srcn; uint16(pfn + zeros(size(v)))];
+      tank.highpass = [tank.highpass; v; NaN];
+      tank.highpass_t = [tank.highpass_t; t-tank.t0; NaN];
+      tank.highpass_srcn = [tank.highpass_srcn; ...
+                          uint16(pfn + zeros(size(v))); 0];
     end
   end
 
@@ -93,9 +94,10 @@ for pfn = 1:length(tank.srcs)
       t = linspace(h5readatt(hf, '/continuous/lfp', 'tstart'), ...
                    h5readatt(hf, '/continuous/lfp', 'tend'), ...
                    length(v))';
-      tank.lowpass = [tank.lowpass; v];
-      tank.lowpass_t = [tank.lowpass_t; t-tank.t0];
-      tank.lowpass_srcn = [tank.lowpass_srcn; uint16(pfn + zeros(size(v)))];
+      tank.lowpass = [tank.lowpass; v; NaN];
+      tank.lowpass_t = [tank.lowpass_t; t-tank.t0; NaN];
+      tank.lowpass_srcn = [tank.lowpass_srcn; ...
+                          uint16(pfn + zeros(size(v))); NaN];
     end
   end
 end
