@@ -82,7 +82,6 @@ for srcn = 1:nsrcs
       hold on;
     end
     title(sprintf('srcn=%d ch=%d', srcn, ch));
-    axis square;
     axis tight;
     yrange(-vrange, +vrange);
     
@@ -139,10 +138,11 @@ for ch = chs
 
     for srcn = 1:nsrcs
       offset = -ysep * (srcn - 1);
-      scs = unique(tank.snips_sc(tank.snips_srcn == srcn & ...
-                                 tank.snips_ch == ch))';
       ix = find(tank.snips_srcn == srcn & ...
                 tank.snips_ch == ch & tank.snips_sc == sc);
+      if isempty(ix)
+        continue;
+      end
       switch mode
         case 'raw'
           ix = ix(randperm(length(ix)));
