@@ -10,7 +10,7 @@ install:
 	chmod +x getexpers.sh; cp getexpers.sh $(DEST)/getexpers
 	cp pyt_*.m $(DEST)
 	cp stab_*.m $(DEST)
-	cp list_tdtblocks $(DEST)
+	cp list_tdtblocks.m $(DEST)
 	cp tdtsnipcolors.m $(DEST)
 	sed -i "s^HDF5DUMP^\'$(HDF5DUMP)\'^" $(DEST)/tank2hdf5.py
 	sed -i "s^HDF5DUMP^\'$(HDF5DUMP)\'^" $(DEST)/pyt_load.m
