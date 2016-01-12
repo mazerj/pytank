@@ -27,52 +27,56 @@ MAXPTS = 1000;
 
 ix = find(t.snips_ch == ch & t.snips_sc == sc);
 snips = t.snips_v(ix, :);
+fs = 1.0 / mean(diff(t.snips_t(1,:)));
+
 
 vmax = max(snips, [], 2);
 vmin = min(snips, [], 2);
 wid = zeros(size(vmax));
 for n = 1:length(wid)
-  wid(n) = abs(mean(find(snips(n,:) == vmax(n))) - ...
-               mean(find(snips(n,:) == vmin(n))));
+  wid(n) = 1e6 * abs(mean(find(snips(n,:) == vmax(n))) - ...
+                     mean(find(snips(n,:) == vmin(n)))) / fs;
 end
 scores = [1e6*vmax 1e6*vmin wid];
 
-names = {'vmax (uv)', 'vmin (uv)', 'width (samps)'};
+names = {'vmax (uv)', 'vmin (uv)', 'width (us)'};
 
 N=50;
 bn = round(size(scores,1)/N);
 cm = icolormap([1 0 0; 0 1 0; 0 0 1], N/2);
 
 if flat
-  NPC = 3;
+  NMET = size(scores, 2);
   np = 1;
-  for pc1 = 1:NPC
-    for pc2 = 1:NPC
-      if pc2 >= pc1
-        pcs = [pc1 pc2];
-        subplot(NPC,NPC,np);
+  for met1 = 1:NMET
+    for met2 = 1:NMET
+      if met2 >= met1
+        mets = [met1 met2];
+        subplot(NMET,NMET,np);
         mx = [];
         my = [];
         for n = 1:N
           ix = ((n-1)*bn)+(1:bn);
           ix = ix(ix <= size(scores,1));
-          mx = [mx mean(scores(ix, pcs(1)))];
-          my = [my mean(scores(ix, pcs(2)))];
+          mx = [mx mean(scores(ix, mets(1)))];
+          my = [my mean(scores(ix, mets(2)))];
           while length(ix) > MAXPTS
             ix = ix(1:2:end);
           end
-          set(plot(scores(ix,pcs(1)), scores(ix,pcs(2)), '.'), ...
+          set(plot(scores(ix,mets(1)), scores(ix,mets(2)), '.'), ...
               'Color', cm(n,:));
           hold on;
         end
         
-        l = plot(mx, my, 'k-o');
-        set(l, 'linewidth', 3, 'markersize', 3);
-        
-        axis square;
+        set(plot(mx(1), my(1), 'go'), ...
+            'markerfacecolor', 'g', 'markeredgecolor', 'k');
+        set(plot(mx(end), my(end), 'ro'), ...
+            'markerfacecolor', 'r', 'markeredgecolor', 'k');
+        arrow([mx(1) my(1)], [mx(end) my(end)]);
         hold off;
-        xlabel(names{1});
-        ylabel(names{2});
+        grid on;
+        xlabel(names{met1});
+        ylabel(names{met2});
         if np == 1
           title(sprintf('ch=%d sc=%d (time: R->G->B)', ch, sc));
         end
@@ -84,23 +88,26 @@ else
   mx = [];
   my = [];
   mz = [];
-  pcs = 1:3;
+  mets = 1:3;
   for n = 1:N
     ix = ((n-1)*bn)+(1:bn);
     ix = ix(ix <= size(scores,1));
-    mx = [mx mean(scores(ix, pcs(1)))];
-    my = [my mean(scores(ix, pcs(2)))];
-    mz = [mz mean(scores(ix, pcs(3)))];
+    mx = [mx mean(scores(ix, mets(1)))];
+    my = [my mean(scores(ix, mets(2)))];
+    mz = [mz mean(scores(ix, mets(3)))];
     while length(ix) > MAXPTS
       ix = ix(1:2:end);
     end
-    set(plot3(scores(ix,pcs(1)), scores(ix,pcs(2)), ...
-              scores(ix,pcs(3)), '.'), 'Color', cm(n,:));
+    set(plot3(scores(ix,mets(1)), scores(ix,mets(2)), ...
+              scores(ix,mets(3)), '.'), 'Color', cm(n,:));
     hold on;
   end
-  l = plot3(mx, my, mz, 'k-o');
-  set(l, 'linewidth', 3, 'markersize', 3);
-  
+  set(plot3(mx(1), my(1), mz(1), 'go'), ...
+      'markerfacecolor', 'g', 'markeredgecolor', 'k');
+  set(plot3(mx(end), my(end), mz(end), 'ro'), ...
+      'markerfacecolor', 'r', 'markeredgecolor', 'k');
+  arrow([mx(1) my(1) mz(1)], [mx(end) my(end) mz(end)]);
+
   axis square;
   hold off;
   xlabel(names{1});

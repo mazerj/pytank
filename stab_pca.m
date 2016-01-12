@@ -57,8 +57,11 @@ if flat
           hold on;
         end
         
-        l = plot(mx, my, 'k-o');
-        set(l, 'linewidth', 3, 'markersize', 3);
+        set(plot(mx(1), my(1), 'go'), ...
+            'markerfacecolor', 'g', 'markeredgecolor', 'k');
+        set(plot(mx(end), my(end), 'ro'), ...
+            'markerfacecolor', 'r', 'markeredgecolor', 'k');
+        arrow([mx(1) my(1)], [mx(end) my(end)]);
         
         axis square;
         hold off;
@@ -86,8 +89,12 @@ else
               scores(ix,pcs(3)), '.'), 'Color', cm(n,:));
     hold on;
   end
-  l = plot3(mx, my, mz, 'k-o');
-  set(l, 'linewidth', 3, 'markersize', 3);
+  
+  set(plot3(mx(1), my(1), mz(1), 'go'), ...
+      'markerfacecolor', 'g', 'markeredgecolor', 'k');
+  set(plot3(mx(end), my(end), mz(end), 'ro'), ...
+      'markerfacecolor', 'r', 'markeredgecolor', 'k');
+  arrow([mx(1) my(1) mz(1)], [mx(end) my(end) mz(end)]);
   
   axis square;
   hold off;
