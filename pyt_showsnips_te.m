@@ -73,9 +73,9 @@ for srcn = 1:nsrcs
                [tdtsnipcolors(sc) '-']);
           set(gca, 'Color', [0.5 0.5 0.5]);
         case 'mean'
-          ls = eplot(tbase, ...
-                     1e6*mean(tank.snips_v(ix, :), 1), ...
-                     1e6*std(tank.snips_v(ix, :), 1));
+          ls = pyt_eplot(tbase, ...
+                         1e6*mean(tank.snips_v(ix, :), 1), ...
+                         1e6*std(tank.snips_v(ix, :), 1));
           set(ls(2), 'Color', tdtsnipcolors(sc));
           set(ls(1), 'FaceColor', tdtsnipcolors(sc), 'FaceAlpha', 0.3);
           set(gca, 'Color', [0.5 0.5 0.5]);
@@ -155,9 +155,9 @@ for ch = chs
                [tdtsnipcolors(sc) '-']);
           set(gca, 'Color', [0.5 0.5 0.5]);
         case 'mean'
-          ls = eplot(tbase, ...
-                     offset + 1e6*mean(tank.snips_v(ix, :), 1), ...
-                     1e6*std(tank.snips_v(ix, :), 1));
+          ls = pyt_eplot(tbase, ...
+                         offset + 1e6*mean(tank.snips_v(ix, :), 1), ...
+                         1e6*std(tank.snips_v(ix, :), 1));
           set(ls(2), 'Color', tdtsnipcolors(sc));
           set(ls(1), 'FaceColor', tdtsnipcolors(sc), 'FaceAlpha', 0.3);
           set(gca, 'Color', [0.5 0.5 0.5]);
@@ -182,24 +182,4 @@ for ch = chs
     np = np + 1;
   end
 end
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-function ls = eplot(x, y, ye)
-%function ls = eplot(x, y, ye)
-%
-% Uses eshade to generate nice looking simple x,y,error plots in
-% one function call.
-%
-
-if ~ishold
-  cla;                                  % otherwise old eshade's persist..
-end
-h = ishold;
-hold on;
-ls = [eshade(x, y, ye); plot(x, y, 'r-')];
-if ~h, hold off, end;
-
-
-
 
