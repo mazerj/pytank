@@ -51,6 +51,7 @@ import types
 import time
 import sys
 
+
 # if DUMP is set to '.', dump into current dir
 try:
     DUMPDIR = HDF5DUMP
@@ -61,7 +62,7 @@ MAXSEGS_PER_FILE = 50000
 
 import numpy as np
 import pylab as p
-from scipy.signal import iirdesign, filtfilt
+from scipy.signal import iirdesign, filtfilt, freqz
 
 def icode(x):
 	"""Convert 4byte event code (Snip, eNeu etc) into string and vice versa.
@@ -364,16 +365,32 @@ class Block():
 
 		return True
 
-	def showfilters(self):
+	def showfilters(self, outfile=None):
 		"""Plot frequency response for lfp and spikefilters.
 		"""
-		p.figure()
+
+        nyq = self.fs / 2.0 / np.pi
+
 		w, h = freqz(self.lfpfilt[0],self.lfpfilt[1])
-		p.plot(w, 20*np.log10(abs(h)), 'r-')
-		w, h = freqz(self.spkfilt[0],self.spkfilt[1])
-		p.plot(w, 20*np.log10(abs(h)), 'b-')
-		p.xscale('log')
+        w = w * nyq;
+		p.plot(w, abs(h), 'r-', label='lfp LP')
+		w, h = freqz(self.spkfilt1[0],self.spkfilt1[1])
+
+        w = w * nyq;
+		p.plot(w, (abs(h)), 'g-', label='spk HP')
+		w, h = freqz(self.spkfilt2[0],self.spkfilt2[1])
+        w = w * nyq;
+		p.plot(w, (abs(h)), 'b-', label='spk LP')
 		p.title('lfp/spike freq response')
+        p.legend()
+        p.xlabel('frequency (hz)')
+        p.ylabel('normalized gain')
+        
+
+        if outfile:
+            p.savefig(outfile)
+        else:
+            p.show()
 			
     def meansnip(self, channel, sortcode):
         t, v, sc = self.snips[channel]
@@ -548,14 +565,19 @@ def getblocks(pypefile):
         
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        sys.stderr.write('usage: %s [-force] ..pypefiles..\n' % sys.argv[0])
+        sys.stderr.write('usage: %s [-force|-showfilters] ..pypefiles..\n' % sys.argv[0])
         sys.exit(1)
 
     force = False
+    showfilts = False
     files = []
     for f in sys.argv[1:]:
         if f == '-force':
             force = True
+        elif f == '-showfilters':
+            # note: still need to specify a pype/tank for show filters
+            # so sampling params can be determined...
+            showfilts = True
         else:
             files.append(f)
 
@@ -576,6 +598,9 @@ if __name__ == '__main__':
                 base = string.join(block.src.split('/')[-2:], '-')
                 outfile = '%s/%s%s.th5' % (DUMPDIR, base, k,)
                 if block.getall(first=a, last=b):
+                    if showfilts:
+                        block.showfilters()
+                        sys.exit(0)
 				    print '  %s' % (outfile,)
 					try:
 						block.savehdf5('%s' % (outfile,), force=force)
