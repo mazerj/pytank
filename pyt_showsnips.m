@@ -41,8 +41,8 @@ for ch = chs
   for sc = scs
     ix = find(tank.snips_ch == ch & tank.snips_sc == sc);
     ls = eplot(1:size(tank.snips_v, 2), ....
-               1e6*mean(tank.snips_v(ix, :), 1), ...
-               1e6*std(tank.snips_v(ix, :), 1));
+               1e6*nanmean(tank.snips_v(ix, :), 1), ...
+               1e6*nanstd(tank.snips_v(ix, :), 1));
     set(ls(2), 'Color', tdtsnipcolors(sc));
     set(ls(1), 'FaceColor', tdtsnipcolors(sc), 'FaceAlpha', 0.3);
     hold on;
